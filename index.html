@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ 3D 큐브 성향 판독기 : 50문항 아레나</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@600;800;900&display=swap');
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #090a0f; font-family: 'Pretendard', sans-serif; color: #fff;
+            display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 15px;
+        }
+
+        .arena-wrapper {
+            width: 100%; max-width: 480px; background: #151722; border-radius: 24px;
+            padding: 25px; border: 1px solid #282b3d; display: flex; flex-direction: column; gap: 20px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+        }
+
+        .arena-header { display: flex; justify-content: space-between; align-items: center; }
+        .topic-badge { background: #00ffcc; color: #000; font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 20px; }
+        .score-counter { font-size: 0.85rem; color: #8a8f9f; font-weight: bold; }
+
+        .progress-container { background: #222533; height: 6px; border-radius: 3px; width: 100%; overflow: hidden; }
+        .progress-bar { background: #00ffcc; height: 100%; width: 0%; transition: width 0.15s ease; }
+
+        .question-box { min-height: 100px; display: flex; align-items: center; justify-content: center; text-align: center; }
+        .question-text { font-size: 1.15rem; font-weight: 800; line-height: 1.6; word-break: keep-all; }
+
+        /* 5지선다 객관식 UI */
+        .choice-container { display: none; flex-direction: column; gap: 10px; width: 100%; }
+        .choice-card {
+            background: #202334; border: 2px solid #333852; border-radius: 12px; padding: 14px 18px;
+            text-align: left; font-size: 0.9rem; font-weight: 700; cursor: pointer; color: #e2e4e9;
+            transition: all 0.2s ease; line-height: 1.4;
+        }
+        .choice-card:hover { border-color: #00ffcc; }
+        .choice-card.selected { background: #00ffcc; border-color: #fff; color: #000; font-weight: 900; }
+
+        /* 주관식 단답형 UI */
+        .subjective-container { display: none; flex-direction: column; gap: 10px; width: 100%; }
+        .subjective-input {
+            width: 100%; background: #202334; border: 2px solid #333852; border-radius: 12px;
+            padding: 16px; color: #fff; font-size: 1rem; font-weight: 700; outline: none;
+            transition: border-color 0.2s ease;
+        }
+        .subjective-input:focus { border-color: #00ffcc; }
+
+        .control-row { display: flex; flex-direction: column; gap: 10px; }
+        .next-trigger-btn {
+            background: #fff; color: #090a0f; border: none; padding: 15px; border-radius: 14px;
+            font-size: 1rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .next-trigger-btn:disabled { background: #222533; color: #5c6075; cursor: not-allowed; }
+
+        /* 최종 결과창 스크롤 대응 스펙 변경 */
+        .result-card-view {
+            display: none; background: linear-gradient(135deg, #112520 0%, #07080c 100%);
+            border: 3px solid #00ffcc; border-radius: 20px; padding: 35px 20px; text-align: center;
+            box-shadow: 0 0 35px rgba(0, 255, 204, 0.3); max-height: 85vh; overflow-y: auto;
+        }
+        .result-card-view h2 { font-size: 0.85rem; color: #00ffcc; letter-spacing: 3px; margin-bottom: 5px; font-weight: 900; }
+        
+        .mbti-code-display {
+            font-size: 4.2rem; font-weight: 900; color: #fff; letter-spacing: 4px; margin: 10px 0;
+            text-shadow: 0 0 25px rgba(0, 255, 204, 0.7); font-family: monospace;
+        }
+        .type-title { font-size: 1.45rem; font-weight: 800; color: #e2e4e9; margin-bottom: 15px; }
+        .type-desc { font-size: 0.9rem; line-height: 1.6; color: #b2b6c9; background: rgba(0,0,0,0.6); padding: 18px; border-radius: 12px; margin-bottom: 25px; text-align: left; word-break: keep-all; border-left: 3px solid #00ffcc; }
+        
+        .tag-box { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 20px; }
+        .tag-item { background: #172d28; color: #00ffcc; border: 1px solid rgba(0, 255, 204, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; }
+
+        /* 백분율 스펙트럼 분석 그래프 UI */
+        .analysis-section { text-align: left; background: rgba(255,255,255,0.03); border-radius: 14px; padding: 18px; margin-bottom: 25px; border: 1px solid #222533; }
+        .section-sub-title { font-size: 1rem; font-weight: 800; color: #00ffcc; margin-bottom: 15px; display: flex; align-items: center; gap: 6px; }
+        .axis-row { margin-bottom: 15px; }
+        .axis-label { font-size: 0.8rem; font-weight: bold; color: #8a8f9f; margin-bottom: 6px; display: flex; justify-content: space-between; }
+        .graph-track { background: #222533; height: 12px; border-radius: 6px; overflow: hidden; display: flex; }
+        .graph-bar-1 { background: #ff4757; height: 100%; transition: width 0.3s ease; }
+        .graph-bar-2 { background: #ffa502; height: 100%; transition: width 0.3s ease; }
+        .graph-bar-3 { background: #2ed573; height: 100%; transition: width 0.3s ease; }
+        .legend-info { display: flex; justify-content: space-between; font-size: 0.7rem; color: #a5b1c2; font-weight: 700; margin-top: 4px; }
+
+        /* 다른 유형 사전 UI 리스트 */
+        .all-types-grid { text-align: left; background: rgba(0,0,0,0.4); border-radius: 14px; padding: 15px; border: 1px solid #282b3d; max-height: 250px; overflow-y: auto; margin-bottom: 25px; }
+        .type-item-row { display: flex; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid #1f212f; font-size: 0.8rem; }
+        .type-item-row:last-child { border-bottom: none; }
+        .type-item-code { font-weight: 900; color: #00ffcc; font-family: monospace; }
+        .type-item-name { color: #e2e4e9; font-weight: 700; text-align: right; }
+    </style>
+</head>
+<body>
+
+    <div class="arena-wrapper" id="main-game-panel">
+        <div class="arena-header">
+            <span class="topic-badge" id="badge-node">ANALYSIS</span>
+            <span class="score-counter" id="counter-node">문제 1 / 50</span>
+        </div>
+
+        <div class="progress-container"><div class="progress-bar" id="progress-bar-node"></div></div>
+
+        <div class="question-box"><p class="question-text" id="q-text-node">분석기 로딩 중...</p></div>
+
+        <div class="choice-container" id="ui-choice-area">
+            <div class="choice-card" id="opt-1" onclick="handleSelectChoice(1)">1</div>
+            <div class="choice-card" id="opt-2" onclick="handleSelectChoice(2)">2</div>
+            <div class="choice-card" id="opt-3" onclick="handleSelectChoice(3)">3</div>
+            <div class="choice-card" id="opt-4" onclick="handleSelectChoice(4)">4</div>
+            <div class="choice-card" id="opt-5" onclick="handleSelectChoice(5)">5</div>
+        </div>
+
+        <div class="subjective-container" id="ui-subjective-area">
+            <input type="text" class="subjective-input" id="sub-input" placeholder="여기에 당신의 생각이나 단어를 입력하세요..." oninput="handleInputSubjective()">
+        </div>
+
+        <div class="control-row">
+            <button class="next-trigger-btn" id="next-btn" onclick="loadNextQuestion()" disabled>
+                <span>답변 확정 후 다음 문제로</span> <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="arena-wrapper result-card-view" id="result-panel">
+        <h2>YOUR CUBE TYPE CODE</h2>
+        <div class="mbti-code-display" id="res-mbti-code">...</div>
+        <div class="type-title" id="res-type-title">분석 완료</div>
+        
+        <div class="tag-box" id="res-tags"></div>
+
+        <div class="type-desc" id="res-type-desc"></div>
+
+        <div class="analysis-section">
+            <div class="section-sub-title"><i class="fa-solid fa-chart-pie"></i> 차원별 세부 점수 분포 비율</div>
+            
+            <div class="axis-row">
+                <div class="axis-label"><span>현실 인식 스탠스 스펙트럼</span><span id="txt-per-x">C:33% | I:33% | N:34%</span></div>
+                <div class="graph-track">
+                    <div class="graph-bar-1" id="bar-x-1" style="width: 33.3%;"></div>
+                    <div class="graph-bar-2" id="bar-x-2" style="width: 33.3%;"></div>
+                    <div class="graph-bar-3" id="bar-x-3" style="width: 33.4%;"></div>
+                </div>
+                <div class="legend-info"><span>■ C (자본주의)</span><span>■ I (개인주의)</span><span>■ N (자연인)</span></div>
+            </div>
+
+            <div class="axis-row">
+                <div class="axis-label"><span>인간관계 필터 스펙트럼</span><span id="txt-per-y">M:33% | G:33% | F:34%</span></div>
+                <div class="graph-track">
+                    <div class="graph-bar-1" id="bar-y-1" style="width: 33.3%;"></div>
+                    <div class="graph-bar-2" id="bar-y-2" style="width: 33.3%;"></div>
+                    <div class="graph-bar-3" id="bar-y-3" style="width: 33.4%;"></div>
+                </div>
+                <div class="legend-info"><span>■ M (맑눈광)</span><span>■ G (갓생러)</span><span>■ F (감성요정)</span></div>
+            </div>
+
+            <div class="axis-row">
+                <div class="axis-label"><span>위기 행동력 스펙트럼</span><span id="txt-per-z">B:33% | A:33% | H:34%</span></div>
+                <div class="graph-track">
+                    <div class="graph-bar-1" id="bar-z-1" style="width: 33.3%;"></div>
+                    <div class="graph-bar-2" id="bar-z-2" style="width: 33.3%;"></div>
+                    <div class="graph-bar-3" id="bar-z-3" style="width: 33.4%;"></div>
+                </div>
+                <div class="legend-info"><span>■ B (불도저)</span><span>■ A (설계자)</span><span>■ H (은둔자)</span></div>
+            </div>
+        </div>
+
+        <div class="analysis-section" style="margin-bottom: 15px;">
+            <div class="section-sub-title"><i class="fa-solid fa-book"></i> 27개 큐브 매트릭스 전종 도감</div>
+            <div class="all-types-grid" id="type-dictionary-box"></div>
+        </div>
+
+        <button class="next-trigger-btn" style="background:#00ffcc; color:#000; width:100%; font-weight:900;" onclick="location.reload()">
+            <i class="fa-solid fa-rotate-right"></i> <span>테스트 다시 하기</span>
+        </button>
+    </div>
+
+    <script>
+        // 50문항 마라톤 구조 데이터셋
+        const dataset = [
+            { type: "objective", axis: "X", text: "내 모든 비밀 카톡 기록이 일주일간 단톡방에 강제 전체 공개되는 대가로 현금 1억이 입금된다면?", options: ["즉시 수락하고 플렉스 계획을 짠다", "지인들과의 신뢰를 생각해 절대 수락하지 않는다", "공개되기 직전에 방을 다 폭파시키고 잠수탄다", "반발하며 소송이나 우회 방법을 알아본다", "친한 사람 몇 명에게 미리 실토하고 양해를 구한다"] },
+            { type: "objective", axis: "X", text: "친구가 큰돈을 벌 수 있는 투자를 제안하며 동업이나 자금 융통을 요구할 때 나의 본능적인 포지션은?", options: ["칼같이 자르고 비즈니스는 엮이지 않는다", "투자 계획서를 정밀 분석한 후 소액만 넣는다", "친한 의리가 있으니 일단 믿고 동참한다", "돈을 빌려주되 없어도 되는 돈이라 생각하고 준다", "귀찮으니 대답을 회피하며 시간을 끈다"] },
+            { type: "objective", axis: "X", text: "식사 비용을 더치페이 정산할 때 당신이 선호하는 계산 방식 스타일은?", options: ["10원 단위까지 완벽하게 분할 정산", "내가 조금 더 내거나 대충 올림해서 송금", "상황 봐서 이번엔 내가 내고 다음엔 네가 사기", "누군가 총대 메고 정산해 줄 때까지 침묵", "제일 비싼 메뉴 시킨 사람에게 가중치 부여"] },
+            { type: "objective", axis: "X", text: "복권 1등 당첨이라는 거대한 행운이 찾아왔을 때, 이 소식을 누구에게까지 오픈할 것인가?", options: ["아무에게도 안 알리고 완벽하게 비밀 유지", "배우자나 직계 가족에게만 오픈", "가장 친한 절친 1~2명에게만 오픈", "술자리에서 기분 좋게 한턱 쏘며 자랑", "익명 커뮤니티에 인증글부터 올리기"] },
+            { type: "objective", axis: "X", text: "쇼핑을 할 때 상품을 결정하고 결제하기까지 소비하는 시간과 성향은?", options: ["인터넷 최저가와 쿠폰을 30분 이상 필사적으로 검색", "대충 리뷰 상위권에 있는 검증된 브랜드 즉시 구매", "오프라인 매장 가서 직접 만져보고 신중히 선택", "위시리스트에 넣어두고 일주일 이상 고민 후 결제", "남들이 좋다고 추천해 주는 아이템 그대로 따라 사기"] },
+            { type: "objective", axis: "X", text: "모임 회비나 공금을 관리하는 총무 역할을 맡게 되었을 때 당신의 마음가짐은?", options: ["엑셀로 장부 정리를 완벽하게 끝낼 자신에 짜릿하다", "돈 계산 엮이는 거 싫어서 절대 안 맡으려고 도망친다", "맡겨주면 대충 영수증만 모아두고 주먹구구로 처리한다", "공금으로 소소한 혜택이나 포인트를 챙길 궁리를 한다", "다른 사람에게 수수료(?)를 주고 대행시키고 싶다"] },
+            { type: "objective", axis: "X", text: "직장을 선택할 때 내가 포기할 수 없는 최우선 절대 가치는 무엇인가?", options: ["영혼까지 갈아 넣더라도 업계 최고 수준의 연봉", "칼퇴근과 개인 사생활이 보장되는 신선급 워라밸", "지하철역 도보 3분 이내의 완벽한 출퇴근 접근성", "동료들과 부딪히지 않고 혼자 조용히 일하는 환경", "회사의 미래 비전과 네임밸류 및 커리어 성장"] },
+            { type: "objective", axis: "X", text: "길을 걷다가 바닥에 떨어진 5만 원짜리 지폐를 발견했을 때 뇌보다 먼저 움직이는 행동은?", options: ["주변 눈치를 슬쩍 살핀 뒤 본능적으로 발로 밟아 확보", "주인을 찾아주기 위해 근처 파출소나 관리실로 이동", "누가 몰래카메라 찍나 위를 올려다보며 의심", "못 본 척 무시하고 갈 길 가며 엮이지 않으려 함", "친구에게 톡으로 '대박 사건'이라며 사진부터 전송"] },
+            { type: "objective", axis: "X", text: "축의금이나 조의금 같은 경조사비를 지출할 때 내면에서 작용하는 기준 지표는?", options: ["상대방이 나에게 냈던 금액을 장부에서 확인 후 매칭", "현재 내 통장 잔고의 실시간 여유 상태에 맞춰 지출", "상대방과 앞으로 얼마나 더 볼 사이인지 친밀도 계산", "주변 지인들이 평균적으로 얼마 내는지 물어보고 통일", "금액보다는 무조건 현장에 직접 참석해 마음을 전함"] },
+            { type: "objective", axis: "X", text: "내일 지구가 완전히 멸망한다는 비보가 확정되었다면 마지막 남은 하루 동안 무엇을 할 것인가?", options: ["은행이나 금은방을 털어 최고급 럭셔리 라이프 플렉스", "가족이나 연인과 함께 조용히 집에서 마지막 만찬을 즐김", "평소 마음에 안 들었던 빌런들을 찾아가 화끈하게 복수", "무소유의 정신으로 종교 시설이나 명상에 잠김", "커뮤니티에 '지구 멸망 실시간 중계' 글 쓰며 소통"] },
+            { type: "objective", axis: "X", text: "스마트폰이나 노트북 등 메인 전자기기를 교체할 때 소비 기준 분기점은?", options: ["무조건 출시된 지 얼마 안 된 최고 스펙 플래그십 모델", "성능과 가격을 정밀 대조한 압도적 가성비 라인업", "성능 다 필요 없고 디자인과 감성이 예쁜 모델", "고장 나거나 액정이 완전히 박살 날 때까지 존버 후 구매", "주변 친구들이 가장 많이 쓰고 대중적인 제품"] },
+            { type: "objective", axis: "X", text: "친구가 고마움의 표시로 선물을 주겠다고 할 때 가장 기분 좋은 형태는?", options: ["즉시 현금으로 쓸 수 있는 배달 앱이나 백화점 상품권", "평소 내가 갖고 싶다고 흘리듯 말했던 아이템", "상대방의 정성과 진심이 듬뿍 담긴 손편지와 소소한 굿즈", "실용성 끝판왕인 영양제나 생필품 세트", "유명 맛집이나 고급 레스토랑 식사 전용 초대권"] },
+
+            { type: "objective", axis: "Y", text: "가장 절친한 친구가 시험, 취업 혹은 연애에서 처참하게 실패했을 때 내면의 진짜 솔직한 심정은?", options: ["진심으로 가슴 아프고 어떻게 위로할지 잠이 안 온다", "겉으로는 위로하지만 속으로 내 인생이 다행이라 안도함", "실패의 원인을 냉철하게 분석해서 뼈 때리는 조언 장전", "위로해 주기 귀찮아서 연락을 조금 늦게 확인한다", "맛있는 술이나 음식을 사주며 기분을 전환해 주려 함"] },
+            { type: "objective", axis: "Y", text: "모임 멤버의 애인이 다른 이성과 낯 뜨거운 바람을 피우는 완벽한 현장을 포착했다면?", options: ["즉시 증거 사진을 찍어 단톡방에 원자폭탄처럼 투하", "친구의 멘탈 보호를 위해 따로 불러 조용히 증거 공유", "당사자(바람핀 사람)에게 먼저 연락해 협박 겸 경고 날림", "모르는 척 철저히 침묵하며 남의 가정사에 엮이지 않음", "다른 멤버에게 은밀히 소문을 퍼트려 여론을 형성"] },
+            { type: "objective", axis: "Y", text: "나를 아무 이유 없이 싫어하거나 저격하는 빌런을 만났을 때 당신의 대응 메커니즘은?", options: ["합법적인 선에서 그 사람의 인생을 꼬이게 할 복수 계획", "왜 나를 싫어하는지 정중하게 대화를 시도하고 오해 풀기", "타격감 제로. 존재 자체를 유령 취급하며 철저히 무시", "뒤에서 지인들을 포섭해 그 사람을 고립시키는 정치질", "혼자 속상해하며 왜 나한테 이럴까 밤마다 이불킥"] },
+            { type: "objective", axis: "Y", text: "친구와 말싸움을 크게 한 뒤 서먹해진 상태에서 당신이 취하는 스탠스는?", options: ["내 잘못이 조금이라도 있다면 먼저 톡으로 사과", "상대방이 먼저 고개를 숙이고 연락 올 때까지 무한 존버", "제3자 친구를 다리로 삼아 자연스러운 술자리 주선 요구", "화해고 뭐고 귀찮으니 그대로 멀어지는 인맥 정리", "아무 일 없었다는 듯 밈(Meme)이나 웃긴 영상 툭 던지기"] },
+            { type: "objective", axis: "Y", text: "친구가 '나 요즘 너무 무기력하고 우울해서 화분 하나 샀어'라고 말할 때 즉각적인 반응은?", options: ["왜 우울해? 최근에 무슨 슬픈 일 있었어? (감정 몰입)", "오 무슨 화분 샀어? 키우기 쉬운 거야? (식물 탐구)", "우울할 땐 화분보다 햇볕 쬐면서 운동하는 게 직빵임 (해결)", "화분 살 돈은 어디서 났대? 기분 전환 됐음 됐다 (실속)", "나도 요즘 우울한데 커플 화분이네 축하 (동병상련)"] },
+            { type: "objective", axis: "Y", text: "단톡방에 여러 명을 태우고 장문의 글이나 질문을 올렸는데 모두에게 읽씹을 당했다면?", options: ["은근히 소외감과 빡침이 올라오며 복수(단톡방 탈퇴 등) 고려", "다들 바쁜가 보다 하고 쿨하게 넘기고 금방 까먹음", "리액션 유도를 위해 더 자극적인 짤이나 멘트 연타 투하", "내가 뭔 말실수를 했나 앞의 대화 기록들을 유심히 정밀 분석", "개인톡으로 한 놈씩 콕 집어서 왜 답장 안 하냐고 추궁"] },
+            { type: "objective", axis: "Y", text: "평소 정말 극도로 싫어하던 원수 같은 인물이 길에서 심하게 자빠져 피를 흘리고 있다면?", options: ["시민의 도리이자 상식적인 조치로 119에 즉시 신고", "인과응보라며 쌤통이라고 속으로 비웃으며 하이패스 직진", "사진이나 영상을 찍어 단톡방에 '정의구현 떴다' 공유", "멀리서 지켜보다가 다른 사람이 도와주는 거 확인 후 이탈", "가서 '많이 아프세요?'라며 킹받게 은은한 미소로 조롱"] },
+            { type: "objective", axis: "Y", text: "인간관계나 우정, 사랑에 대한 당신의 근본적인 철학 가치관은?", options: ["인간은 결국 이기적 동물이라 완벽한 순수 순정은 없다", "서로 양보하고 배려하면 끈끈한 평생 우정이 존재한다", "기브 앤 테이크. 준 만큼 받고 받은 만큼 주는 계약 관계", "언제든 상황 변하면 배신할 수 있으니 적당한 거리두기가 필수", "서로의 치부까지 다 공유하는 소울메이트가 반드시 필요하다"] },
+            { type: "objective", axis: "Y", text: "누군가 나에게 선의를 베풀며 다가올 때 내면에서 먼저 작동하는 감정은?", options: ["'나한테 왜 잘해주지? 뒤에 목적이 있나?' 강한 의심", "감사한 마음으로 호의를 100% 받아들이고 친해짐", "나중에 나도 뭔가를 갚아야 한다는 심리적 빚쟁이 부담감", "부담스러우니 적당한 선에서 벽을 치고 거리를 유지", "얘 나한테 반했나 착각의 늪에 빠짐"] },
+            { type: "objective", axis: "Y", text: "주변 지인들이 평가하는 당신의 인간관계 캐릭터 이미지는?", options: ["은근히 속을 알 수 없고 광기가 서려 있는 맑눈광 타입", "평화와 도덕을 사랑하는 상식적이고 선한 갓생러 타입", "감수성이 풍부하고 눈물과 정이 넘쳐나는 감성 요정 타입", "자기 이익 철저히 챙기는 여우 같은 실속파 타입", "존재감이 거의 없고 혼자 노는 아웃사이더 고독한 늑대"] },
+            { type: "objective", axis: "Y", text: "타인의 모든 속마음을 생생하게 들을 수 있는 초능력 보청기가 발달한다면?", options: ["즉시 착용하고 나에 대한 뒷담화나 세상 비밀 다 도청", "정신병 걸리거나 상처받을 게 뻔하므로 절대 쓰지 않고 폐기", "특정 비즈니스나 미팅 자리에만 전략적으로 활용", "돈을 받고 다른 사람에게 거액에 팔아넘김", "친한 친구들의 본심만 필터링해서 확인"] },
+            { type: "objective", axis: "Y", text: "만약 단 한 명의 친구만 내 곁에 남길 수 있다면 어떤 스타일을 고를 것인가?", options: ["내가 엄청나게 성공했을 때 질투 없이 온 마음으로 축하할 자", "내가 인생 밑바닥으로 망했을 때 같이 울며 곁을 지켜줄 자", "언제 불러도 노빠꾸로 나와서 같이 술 마셔줄 도파민 동반자", "사회적 인맥이 넓어서 나에게 돈과 기회를 연결해 줄 자", "말 한마디 안 해도 어색하지 않고 유머 코드가 완벽히 맞는 자"] },
+
+            { type: "objective", axis: "Z", text: "세상에서 내가 전혀 모르는 무작위 인간 1명이 완벽히 소멸하는 대가로 50억 버튼이 배달되면?", options: ["보이자마자 인류를 위해 생각 없이 초고속 연타 발사", "도덕성과 양심의 가책 때문에 눈물을 머금고 절대 안 누름", "누르는 순간 CCTV나 흔적이 남는지 정밀 보안 조사 시도", "우울증 걸릴 것 같으니 방구석 구석에 처박아두고 외면", "친구들과 상의해 보고 부작용 없는지 검증 후 결정"] },
+            { type: "objective", axis: "Z", text: "집이나 직장 건물에 갑작스러운 화재 비상 경보가 요란하게 울릴 때 나의 첫 대처 메커니즘은?", options: ["소지품 다 버리고 문 열고 비상구로 전력 질주 탈출", "진짜 불이 났는지 창밖이나 연기를 확인하며 상황 관조", "비상 대피로 동선을 머릿속으로 계산하며 침착하게 이동", "잘못 울린 오작동이겠지 하며 하던 일 계속 직진", "스마트폰과 지갑 등 중요 자산을 챙기느라 타이밍 지연"] },
+            { type: "objective", axis: "Z", text: "친구들과 해외 자유 여행을 떠나기로 했을 때 계획을 수립하는 나의 기여도는?", options: ["분 단위, 동선 동선마다 엑셀로 정밀 계획표 마스터 빌딩", "친구들이 다 짜놓은 계획표에 리액션만 잘하며 몸만 탑승", "항공권과 숙소만 정해두고 현지 가선 꼴리는 대로 움직임", "중요 맛집이나 핫플레이스 몇 군데 링크만 툭툭 던지기", "귀찮아서 여행 가기 직전까지 단톡방 확인 잘 안 함"] },
+            { type: "objective", axis: "Z", text: "낯선 사람들이 대거 참여하는 파티나 대형 네트워킹 술자리에 던져졌을 때 포지션은?", options: ["분위기를 주도하며 여기저기 테이블 폭주하는 헤드라이트", "구석 테이블에서 마음 맞는 한두 명과 조용히 수다 관조", "공짜 안주와 술을 털어 넣으며 칼퇴 타이밍만 계산", "중간에 어색함을 견디지 못하고 화장실 간다 하고 탈주", "명함이나 연락처를 수집하며 기계적인 인맥 관리 모드"] },
+            { type: "objective", axis: "Z", text: "직장 상사나 교수가 대중 앞에서 억까(불합리한 트집)로 내 면전을 갈구기 시작한다면?", options: ["참지 않고 그 자리에서 팩트와 논리로 눈 똑바로 뜨고 맞짱", "일단 고개 숙이고 죄송하다 한 뒤 뒤에서 고소나 징계 준비", "속으로 온갖 쌍욕을 박으며 한 귀로 듣고 한 귀로 흘림", "멘탈이 실시간으로 터져서 눈물 고이거나 얼어붙음", "퇴사나 휴학계를 던질 타이밍이라 생각하고 사직서 소환"] },
+            { type: "objective", axis: "Z", text: "메시지 앱에 읽지 않고 방치해 둔 알림 배지 숫자의 상태는?", options: ["1개라도 떠 있으면 못 참는다, 즉시 확인해서 지워야 함", "귀찮은 연락이나 광고 톡들이 수십 개 이상 쌓여 방치 중", "단톡방은 다 무음 처리해두고 일주일에 한 번 몰아서 봄", "지인 연락만 칼답하고 관심 없는 사람 톡은 안 읽고 안 봄", "안 읽은 메시지 숫자가 999+를 돌파한 지 오래다"] },
+            { type: "objective", axis: "Z", text: "계획대로 풀리지 않고 돌발 변수가 터져 전면 수정이 필요할 때 멘탈 변화는?", options: ["투지가 불타오르며 닥치는 대로 몸으로 부딪쳐 전진 해결", "머리가 하얗게 비어버리고 심한 스트레스와 무기력증 돌입", "플랜 B, 플랜 C를 즉각 가동하는 이성적 연산 처리", "내 잘못 아니라고 책임 전가할 대상부터 서치", "에라 모르겠다 하고 침대로 기어 들어가 잠을 청함"] },
+            { type: "objective", axis: "Z", text: "새로운 가전제품이나 조립식 가구(IKEA 등)를 구매했을 때 시작 매뉴얼 독판 스타일은?", options: ["설명서 1페이지부터 조주의 사항까지 정독한 뒤 작업 개시", "설명서 버리고 감각과 본능으로 감 잡아서 일단 조립 개시", "조립 유튜브 영상이나 브로그 후기 검색해서 눈으로 학습", "손재주 좋은 손님이나 친구 소환해서 맛있는 거 사고 대행", "중간까지 조립하다 나사 남으면 대충 구겨 넣고 마무리"] },
+            { type: "objective", axis: "Z", text: "새벽 2시에 친구가 갑자기 '우리 집 앞에 너 생각나서 술 사 들고 왔어'라며 호출하면?", options: ["의리 가득하게 옷 대충 줏어 입고 노빠꾸로 환호하며 진격", "미친 거 아니냐고 등짝 스매싱 멘트 날리고 문 안 열어줌", "내일 스케줄과 컨디션을 연산해 보고 30분만 마신다 타협", " 자는 척 스마트폰 무음 돌리고 다음 날 아침에 확인 유도", "귀찮아서 나가는 대신 우리 집 거실로 들여서 대접"] },
+            { type: "objective", axis: "Z", text: "단톡방에서 두 파벌이 나뉘어 격렬한 논쟁이나 키보드 배틀이 일어났을 때 당신은?", options: ["내 주장을 논리 장문으로 박아 넣어 대화를 평정 및 요격", "싸움 구경이 제일 재밌다 팝콘 이모티콘 던지며 도파민 충전", "조용히 단톡방 무음 처리하고 알림 다 꺼둠", "양쪽 말 다 일리 있다며 중재하는 박쥐형 비둘기 모드", "불편함을 견디지 못하고 조용히 단톡방 나가기 버튼 클릭"] },
+            { type: "objective", axis: "Z", text: "불법적이거나 위험한 리스크가 있지만 완벽하게 안 걸릴 확신과 계획이 있다면 큰돈을 벌기 위해 배팅할 것인가?", options: ["완벽한 시나리오가 완성되었다면 과감하게 한탕 성공 도전", "리스크가 단 1%라도 있다면 안전이 최고이므로 절대 거절", "일단 간만 보다가 위험해지면 꼬리 자르고 도망칠 각 재기", "합법적인 테두리 내에서 우회할 수 있는 편법을 자문", "무서워서 시도조차 안 하고 땀만 흘림"] },
+
+            { type: "subjective", axis: "X", text: "당신이 인생에서 '이것'을 얻기 위해서라면 영혼까지 팔 수 있다고 생각하는 단어 한 가지는?" },
+            { type: "subjective", axis: "X", text: "통장 잔고에 최소 얼마가 찍혀 있어야 미래에 대한 불안감이 완전히 사라질 것 같습니까? (금액 혹은 단어)" },
+            { type: "subjective", axis: "X", text: "남들이 아무리 가성비 구리다고 욕해도 당신이 감성이나 욕망 때문에 돈을 아끼지 않고 지르는 영역은?" },
+            { type: "subjective", axis: "X", text: "당신을 가장 빠르게 자본주의적으로 움직이게 만드는 최고의 보상 수단은 무엇입니까?" },
+            { type: "subjective", axis: "X", text: "돈이 최고라는 자본주의적 현실 논리에 대해 당신의 평소 한 줄 신념은?" },
+            
+            { type: "subjective", axis: "Y", text: "당신이 인간관계에서 상대방에게서 발견했을 때 바로 손절(인맥 차단)을 결심하게 만드는 극혐 기준 단어는?" },
+            { type: "subjective", axis: "Y", text: "솔직히 주위 사람들이 당신의 성격을 한 단어로 표현할 때 가장 자주 쓰는 수식어는 무엇입니까?" },
+            { type: "subjective", axis: "Y", text: "누군가 당신의 마음에 큰 상처를 주었을 때, 당신이 마음속으로 품는 가장 잔인한 복수의 형태는?" },
+            { type: "subjective", axis: "Y", text: "당신의 멘탈을 위로하기 위해 타인에게 듣고 싶은 가장 완벽한 한 마디 문장은?" },
+            { type: "subjective", axis: "Y", text: "당신이 생각하는 '진정한 친구'란 어떤 존재인지 짧게 정의한다면?" },
+
+            { type: "subjective", axis: "Z", text: "인생 최대의 위기나 멘붕 상황이 들이닥쳤을 때 본능적으로 튀어나오는 당신의 첫 마디 감탄사(혹은 욕설)는?" },
+            { type: "subjective", axis: "Z", text: "평소 당신의 행동력을 가장 크게 가로막는 최대의 장애물 자아(예: 귀찮음, 완벽주의 등)는?" },
+            { type: "subjective", axis: "Z", text: "어떤 결정을 내릴 때 머리로 계산하는 이성과 가슴이 시키는 충동 중 당신을 지배하는 비율이 더 높은 쪽은?" },
+            { type: "subjective", axis: "Z", text: "하기 싫은 무거운 과제나 미션이 주어졌을 때 당신이 행동을 개시하는 타이밍은 언제입니까?" },
+            { type: "subjective", axis: "Z", text: "브레이크 없이 질주하는 폭주기관차와 아무것도 안 하는 방구석 늘보 중 당신에게 더 가까운 자화상은?" }
+        ];
+
+        let currentIndex = 0;
+        let rawCounts = { C: 0, I: 0, N: 0, M: 0, G: 0, F: 0, B: 0, A: 0, H: 0 };
+        let selectedObjectiveObj = null;
+
+        const codesX = ["C", "I", "N"]; const titlesX = ["자본주의형", "개인주의형", "자연인형"];
+        const codesY = ["M", "G", "F"]; const titlesY = ["맑은 눈의 광인", "상식적 갓생러", "감성 요정"];
+        const codesZ = ["B", "A", "H"]; const titlesZ = ["노빠꾸 불도저", "이성적 설계자", "방구석 은둔자"];
+
+        function refreshUI() {
+            if(currentIndex >= dataset.length) {
+                showFinalMBTICubeResult();
+                return;
+            }
+
+            let data = dataset[currentIndex];
+            document.getElementById('counter-node').innerText = `문제 ${currentIndex + 1} / ${dataset.length}`;
+            document.getElementById('q-text-node').innerText = data.text;
+            document.getElementById('next-btn').disabled = true;
+
+            let progress = (currentIndex / dataset.length) * 100;
+            document.getElementById('progress-bar-node').style.width = `${progress}%`;
+
+            if (data.type === "objective") {
+                document.getElementById('ui-choice-area').style.display = "flex";
+                document.getElementById('ui-subjective-area').style.display = "none";
+                for (let i = 1; i <= 5; i++) {
+                    let card = document.getElementById(`opt-${i}`);
+                    card.innerText = `${i}. ${data.options[i-1]}`;
+                    card.classList.remove('selected');
+                }
+                selectedObjectiveObj = null;
+            } else {
+                document.getElementById('ui-choice-area').style.display = "none";
+                document.getElementById('ui-subjective-area').style.display = "flex";
+                document.getElementById('sub-input').value = "";
+            }
+        }
+
+        function handleSelectChoice(num) {
+            for (let i = 1; i <= 5; i++) { document.getElementById(`opt-${i}`).classList.remove('selected'); }
+            document.getElementById(`opt-${num}`).classList.add('selected');
+            selectedObjectiveObj = num;
+            document.getElementById('next-btn').disabled = false;
+        }
+
+        function handleInputSubjective() {
+            let val = document.getElementById('sub-input').value.trim();
+            document.getElementById('next-btn').disabled = (val.length === 0);
+        }
+
+        function loadNextQuestion() {
+            let data = dataset[currentIndex];
+            let subIdx = 0;
+
+            if (data.type === "objective") {
+                subIdx = (selectedObjectiveObj - 1) % 3;
+            } else {
+                let textVal = document.getElementById('sub-input').value.trim();
+                subIdx = textVal.length % 3;
+            }
+
+            if (data.axis === "X") rawCounts[codesX[subIdx]] += 1;
+            else if (data.axis === "Y") rawCounts[codesY[subIdx]] += 1;
+            else rawCounts[codesZ[subIdx]] += 1;
+
+            currentIndex++;
+            refreshUI();
+        }
+
+        function showFinalMBTICubeResult() {
+            document.getElementById('main-game-panel').style.display = "none";
+            document.getElementById('result-panel').style.display = "block";
+
+            let idxX = codesX.map(c => rawCounts[c]).indexOf(Math.max(...codesX.map(c => rawCounts[c])));
+            let idxY = codesY.map(c => rawCounts[c]).indexOf(Math.max(...codesY.map(c => rawCounts[c])));
+            let idxZ = codesZ.map(c => rawCounts[c]).indexOf(Math.max(...codesZ.map(c => rawCounts[c])));
+
+            if(idxX < 0) idxX = 0; if(idxY < 0) idxY = 0; if(idxZ < 0) idxZ = 0;
+
+            let finalCode = `${codesX[idxX]}${codesY[idxY]}${codesZ[idxZ]}`;
+            let finalTitle = `[${titlesX[idxX]}] ${titlesY[idxY]} 성향의 ${titlesZ[idxZ]}`;
+
+            document.getElementById('res-mbti-code').innerText = finalCode;
+            document.getElementById('res-type-title').innerText = finalTitle;
+            document.getElementById('res-type-desc').innerText = `[50문항 입체 마라톤 진단 보고서]\n\n귀하가 35개의 객관식 허들과 15개의 딥한 주관식 검증을 거쳐 도출해낸 최종 자아 분석 코드는 [${finalCode}]입니다.\n\n귀하는 현실적인 문제를 다룰 때 주로 '${titlesX[idxX]}'의 관점으로 접근하며, 인간관계 필터에서는 '${titlesY[idxY]}'의 멘탈리티가 발동되고, 위기 상황에 직면했을 때 최종적으로 '${titlesZ[idxZ]}' 방식으로 사태를 해결하거나 행동을 개시하는 메커니즘을 가지고 있습니다.`;
+
+            document.getElementById('res-tags').innerHTML = `
+                <span class="tag-item">#CUBE_${finalCode}</span>
+                <span class="tag-item">#타입_${finalCode}</span>
+                <span class="tag-item">#50문항_분석완료</span>
+            `;
+
+            let totalX = codesX.reduce((a, c) => a + rawCounts[c], 0) || 1;
+            let perC = Math.round((rawCounts.C / totalX) * 100);
+            let perI = Math.round((rawCounts.I / totalX) * 100);
+            let perN = 100 - (perC + perI);
+
+            let totalY = codesY.reduce((a, c) => a + rawCounts[c], 0) || 1;
+            let perM = Math.round((rawCounts.M / totalY) * 100);
+            let perG = Math.round((rawCounts.G / totalY) * 100);
+            let perF = 100 - (perM + perG);
+
+            let totalZ = codesZ.reduce((a, c) => a + rawCounts[c], 0) || 1;
+            let perB = Math.round((rawCounts.B / totalZ) * 100);
+            let perA = Math.round((rawCounts.A / totalZ) * 100);
+            let perH = 100 - (perB + perA);
+
+            document.getElementById('txt-per-x').innerText = `C:${perC}% | I:${perI}% | N:${perN}%`;
+            document.getElementById('bar-x-1').style.width = `${perC}%`;
+            document.getElementById('bar-x-2').style.width = `${perI}%`;
+            document.getElementById('bar-x-3').style.width = `${perN}%`;
+
+            document.getElementById('txt-per-y').innerText = `M:${perM}% | G:${perG}% | F:${perF}%`;
+            document.getElementById('bar-y-1').style.width = `${perM}%`;
+            document.getElementById('bar-y-2').style.width = `${perG}%`;
+            document.getElementById('bar-y-3').style.width = `${perF}%`;
+
+            document.getElementById('txt-per-z').innerText = `B:${perB}% | A:${perA}% | H:${perH}%`;
+            document.getElementById('bar-z-1').style.width = `${perB}%`;
+            document.getElementById('bar-z-2').style.width = `${perA}%`;
+            document.getElementById('bar-z-3').style.width = `${perH}%`;
+
+            buildDictionaryBox(finalCode);
+        }
+
+        function buildDictionaryBox(myCode) {
+            let dictHtml = "";
+            for (let x = 0; x < 3; x++) {
+                for (let y = 0; y < 3; y++) {
+                    for (let z = 0; z < 3; z++) {
+                        let code = `${codesX[x]}${codesY[y]}${codesZ[z]}`;
+                        let title = `${titlesX[x].replace('형','')}+${titlesY[y]}+${titlesZ[z].replace('방구석 ','')}`;
+                        
+                        let isMeStyle = (code === myCode) ? "background:rgba(0,255,204,0.15); border-left:3px solid #00ffcc; padding-left:4px;" : "";
+                        let meMarker = (code === myCode) ? " <span style='color:#00ffcc; font-size:0.6rem;'>[나의유형]</span>" : "";
+                        
+                        dictHtml += `
+                            <div class="type-item-row" style="${isMeStyle}">
+                                <span class="type-item-code">${code}${meMarker}</span>
+                                <span class="type-item-name">${title}</span>
+                            </div>
+                        `;
+                    }
+                }
+            }
+            document.getElementById('type-dictionary-box').innerHTML = dictHtml;
+        }
+
+        window.onload = function() {
+            refreshUI();
+        };
+    </script>
+</body>
+</html>
